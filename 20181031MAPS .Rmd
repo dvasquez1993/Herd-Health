@@ -1,0 +1,400 @@
+---
+title: "HH Mapping"
+author: "DV & AWP"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning=F,message=F,tidy=T)
+```
+
+
+```{r}
+library(tidyverse)
+library(maps)
+library(magrittr)
+library(stringr)
+# Load the county data from the maps package
+cnty <- map_data("county")
+```
+
+
+```{r}
+d <- read_csv("deer_density.csv")
+
+d %<>% mutate(CntyName=gsub(" County","",CntyName))
+d %<>% mutate(CntyName=tolower(CntyName))
+d %<>% mutate(StateName=tolower(StateName))
+d %<>% rename(region=StateName,subregion=CntyName)
+
+#correct for join
+idx.dekalb <- which(d$subregion=="dekalb")
+d$subregion[idx.dekalb] <- "de kalb"
+
+idx.desoto <- which(d$subregion=="desoto")
+d$subregion[idx.desoto] <- "de soto"
+
+idx.dewitt <- which(d$subregion=="dewitt")
+d$subregion[idx.dewitt] <- "de witt"
+
+idx.dupage <- which(d$subregion=="dupage")
+d$subregion[idx.dupage] <- "du page"
+
+idx.laporte <- which(d$subregion=="laporte")
+d$subregion[idx.laporte] <- "la porte"
+
+idx.lamoure <- which(d$subregion=="lamoure")
+d$subregion[idx.lamoure] <- "la moure"
+
+
+
+d$subregion <- gsub("district of columbia","washington",d$subregion)
+d$subregion <- gsub("gallatin and yellowstone national park","gallatin",d$subregion)
+
+
+d$subregion <- gsub("st\\.","st",d$subregion)
+
+d$subregion <- gsub(" parish","",d$subregion)
+
+d$subregion <- gsub(" city","",d$subregion)
+
+idx.virginia.james <- intersect(which(d$region=="virginia"),which(d$subregion=="james"))
+d$subregion[idx.virginia.james] <- "james city"
+
+idx.nevada.carson <- intersect(which(d$region=="nevada"),which(d$subregion=="carson"))
+d$subregion[idx.nevada.carson] <- "carson city"
+
+d$subregion <- gsub("st genevieve","ste genevieve",d$subregion)
+
+d$subregion <- gsub("alleghany cnty and clifton forge cty","alleghany",d$subregion)
+
+idx.virginia.charles <- intersect(which(d$region=="virginia"),which(d$subregion=="charles"))
+d$subregion[idx.virginia.charles] <- "charles city"
+
+d$subregion <- gsub("halifax with south boston","halifax",d$subregion)
+
+d %<>% filter(!FIPS %in% c(51600,24510,51515,29510,51620,51760,51770))
+d %<>% mutate(presence = ifelse(DeerDensityMode>0,1,0))
+#join
+d.county <- inner_join(d,cnty)
+
+```
+
+
+```{r}
+h <- read_csv("DensityandParasitesPerRecord.csv")
+h = h %>% select(-c('X1', 'Spleen VLPT', 'Unique ID', 'Collection Source', 'SCWDS .', 'other ID.', 'Location', 'Phys Region', 'Weight', 'Physical condition', 'Kidney fat index', 'PCV', 'Serum protein', 'EHD agar', 'BT agar', 'E-1', 'E-2', 'B-2', 'B10', 'B11', 'B13', 'B17', 'Ec IFA date', 'Ec IFA', 'Ec titer', 'HGE IFA date', 'HGE IFA', 'HGE titer', 'chaff summary', 'Chaff Culture', 'Ec 16S Blood', 'Chaff LN PCR', 'Spleen 16S Echaf', 'Bone Marrow PCR Echaf', 'GroESL', 'HGE 16S Blood', 'Lymph Node PCR HGE', 'Spleen PCR HGE', 'Bone Marrow PCR HGE', 'Deer Ehrl Blood PCR', 'Lymph Node PCR "thing"', 'Spleen PCR "thing"', 'Bone Marrow PCR "thing"', 'VLPT Blood', '120 kDa', 'Ewingii Blood PCR', 'B abortus +/-', 'BVD +/-', 'IBR +/-', 'PI3 +/-', 'L bratislava +/-', 'L canicola +/-', 'L grippo +/-', 'L hardjo +/-', 'L ictero +/-', 'L pomana +/-'))
+
+h %<>% rename(FIPS = `FIPS Code`, subregion = `County/Parish`, region = State)
+
+```
+
+
+#separating multiple FIPS codes
+```{r}
+for (i in 1:dim(h)[1]){
+  if (str_length(h$FIPS[i])==11){
+    tmp <- h[i,]
+    h[i,'FIPS'] <- substr( h[i,'FIPS'],1,5)
+    tmp[,'FIPS'] <- substr(tmp[,'FIPS'],7,11)
+    h %<>% bind_rows(.,tmp)
+  }
+  else if (str_length(h$FIPS[i])==17){
+    tmp1 <- h[i,]
+    tmp2 <- h[i,]
+    h[i,'FIPS'] <- substr( h[i,'FIPS'],1,5)
+    tmp1[,'FIPS'] <- substr(tmp[,'FIPS'],7,11)
+    tmp2[,'FIPS'] <- substr(tmp[,'FIPS'],13,17)
+    h %<>% bind_rows(.,tmp1)
+    h %<>% bind_rows(.,tmp2)
+  }
+  else if (str_length(h$FIPS[i])==23){
+    tmp1 <- h[i,]
+    tmp2 <- h[i,]
+    tmp3 <- h[i,]
+    h[i,'FIPS'] <- substr( h[i,'FIPS'],1,5)
+    tmp1[,'FIPS'] <- substr(tmp[,'FIPS'],7,11)
+    tmp2[,'FIPS'] <- substr(tmp[,'FIPS'],13,17)
+    tmp3[,'FIPS'] <- substr(tmp[,'FIPS'],19, 23)
+    h %<>% bind_rows(.,tmp1)
+    h %<>% bind_rows(.,tmp2)
+    h %<>% bind_rows(.,tmp3)
+  }
+}
+
+```
+
+
+```{r}
+idx1 <- which(is.na(X)==T)
+idx2 <- which(is.na(X)==T)
+idx3 <- setdiff(idx2,idx1)
+df[idx3,]
+
+grabUptoSpace <- function(x){
+ y <- strsplit(x,” “)
+ z <- y[[1]][1]
+ return(z)
+}
+
+# function to average over ranges like “100-200”, used to clean intensity
+avgAcrossHyphen <- function(x){
+ y <- strsplit(x,“-”)
+ z <- mean(c(as.numeric(y[[1]][1]),as.numeric(y[[1]][2])))
+ z <- as.character(z)
+ return(z)
+}
+```
+
+
+#mean intensity per parasite
+```{r}
+# pad FIPS codes in d.county with 0 if they are 4-digit
+d.county %<>% mutate(FIPS=as.character(FIPS))
+d.county %<>% mutate(FIPS=ifelse(str_length(FIPS)==4,paste("0",FIPS,sep=""),FIPS))
+
+#get mean of parasites and adding the new DF to d.county for mapping
+DV.avIntens.county <- h %>% select(FIPS,`D viviparus worm number`)
+DV.avIntens.county %<>% mutate(`D viviparus worm number`=as.numeric(`D viviparus worm number`))
+DV.avIntens.county %<>% group_by(FIPS) %>% summarize(DV.avIntens=mean(`D viviparus worm number`,na.rm=T))
+d.county %<>% left_join(.,DV.avIntens.county)
+
+ES.avIntens.county <- h %>% select(FIPS,`E schneideri worm number`)
+ES.avIntens.county %<>% mutate(`E schneideri worm number`=as.numeric(`E schneideri worm number`))
+ES.avIntens.county %<>% group_by(FIPS) %>% summarize(ES.avIntens=mean(`E schneideri worm number`,na.rm=T))
+d.county %<>% left_join(.,ES.avIntens.county)
+
+FM.avIntens.county <- h %>% select(FIPS,`F magna worm number`)
+FM.avIntens.county %<>% mutate(`F magna worm number`=as.numeric(`F magna worm number`))
+FM.avIntens.county %<>% group_by(FIPS) %>% summarize(FM.avIntens=mean(`F magna worm number`,na.rm=T))
+d.county %<>% left_join(.,FM.avIntens.county)
+
+GP.avIntens.county <- h %>% select(FIPS,`G pulchrum worm number`)
+GP.avIntens.county %<>% mutate(`G pulchrum worm number`=as.numeric(`G pulchrum worm number`))
+GP.avIntens.county %<>% group_by(FIPS) %>% summarize(GP.avIntens=mean(`G pulchrum worm number`,na.rm=T))
+d.county %<>% left_join(.,GP.avIntens.county)
+
+GV.avIntens.county <- h %>% select(FIPS,`G verrucosum worm number`)
+GV.avIntens.county %<>% mutate(`G verrucosum worm number`=as.numeric(`G verrucosum worm number`))
+GV.avIntens.county %<>% group_by(FIPS) %>% summarize(GV.avIntens=mean(`G verrucosum worm number`,na.rm=T))
+d.county %<>% left_join(.,GV.avIntens.county)
+
+HC.avIntens.county <- h %>% select(FIPS,`H contortus worm number`)
+HC.avIntens.county %<>% mutate(`H contortus worm number`=as.numeric(`H contortus worm number`))
+HC.avIntens.county %<>% group_by(FIPS) %>% summarize(HC.avIntens=mean(`H contortus worm number`,na.rm=T))
+d.county %<>% left_join(.,HC.avIntens.county)
+
+MO.avIntens.county <- h %>% select(FIPS,`M odocoilei worm number`)
+MO.avIntens.county %<>% mutate(`M odocoilei worm number`=as.numeric(`M odocoilei worm number`))
+MO.avIntens.county %<>% group_by(FIPS) %>% summarize(MO.avIntens=mean(`M odocoilei worm number`,na.rm=T))
+d.county %<>% left_join(.,MO.avIntens.county)
+
+MP.avIntens.county <- h %>% select(FIPS,`M pursglovei worm number`)
+MP.avIntens.county %<>% mutate(`M pursglovei worm number`=as.numeric(`M pursglovei worm number`))
+MP.avIntens.county %<>% group_by(FIPS) %>% summarize(MP.avIntens=mean(`M pursglovei worm number`,na.rm=T))
+d.county %<>% left_join(.,MP.avIntens.county)
+
+OC.avIntens.county <- h %>% select(FIPS,`O cervipedis`)
+OC.avIntens.county %<>% mutate(`O cervipedis`=as.numeric(`O cervipedis`))
+OC.avIntens.county %<>% group_by(FIPS) %>% summarize(OC.avIntens=mean(`O cervipedis`,na.rm=T))
+d.county %<>% left_join(.,OC.avIntens.county)
+
+OD.avIntens.county <- h %>% select(FIPS,`O dikmansi`)
+OD.avIntens.county %<>% mutate(`O dikmansi`=as.numeric(`O dikmansi`))
+OD.avIntens.county %<>% group_by(FIPS) %>% summarize(OD.avIntens=mean(`O dikmansi`,na.rm=T))
+d.county %<>% left_join(.,OD.avIntens.county)
+
+OM.avIntens.county <- h %>% select(FIPS,`O mossi worm number`)
+OM.avIntens.county %<>% mutate(`O mossi worm number`=as.numeric(`O mossi worm number`))
+OM.avIntens.county %<>% group_by(FIPS) %>% summarize(OM.avIntens=mean(`O mossi worm number`,na.rm=T))
+d.county %<>% left_join(.,OM.avIntens.county)
+
+OO.avIntens.county <- h %>% select(FIPS,`O ostertagi`)
+OO.avIntens.county %<>% mutate(`O ostertagi`=as.numeric(`O ostertagi`))
+OO.avIntens.county %<>% group_by(FIPS) %>% summarize(OO.avIntens=mean(`O ostertagi`,na.rm=T))
+d.county %<>% left_join(.,OO.avIntens.county)
+
+PA.avIntens.county <- h %>% select(FIPS,`P andersoni worm number`)
+PA.avIntens.county %<>% mutate(`P andersoni worm number`=as.numeric(`P andersoni worm number`))
+PA.avIntens.county %<>% group_by(FIPS) %>% summarize(PA.avIntens=mean(`P andersoni worm number`,na.rm=T))
+d.county %<>% left_join(.,PA.avIntens.county)
+
+PL.avIntens.county <- h %>% select(FIPS,`P liorchis worm number`)
+PL.avIntens.county %<>% mutate(`P liorchis worm number`=as.numeric(`P liorchis worm number`))
+PL.avIntens.county %<>% group_by(FIPS) %>% summarize(PL.avIntens=mean(`P liorchis worm number`,na.rm=T))
+d.county %<>% left_join(.,PL.avIntens.county)
+
+PT.avIntens.county <- h %>% select(FIPS,`P tenuis worm number`)
+PT.avIntens.county %<>% mutate(`P tenuis worm number`=as.numeric(`P tenuis worm number`))
+PT.avIntens.county %<>% group_by(FIPS) %>% summarize(PT.avIntens=mean(`P tenuis worm number`,na.rm=T))
+d.county %<>% left_join(.,PT.avIntens.county)
+
+SY.avIntens.county <- h %>% select(FIPS,`S yehi worm number`)
+SY.avIntens.county %<>% mutate(`S yehi worm number`=as.numeric(`S yehi worm number`))
+SY.avIntens.county %<>% group_by(FIPS) %>% summarize(SY.avIntens=mean(`S yehi worm number`,na.rm=T))
+d.county %<>% left_join(.,SY.avIntens.county)
+
+TAS.avIntens.county <- h %>% select(FIPS,`T askivali worm number`)
+TAS.avIntens.county %<>% mutate(`T askivali worm number`=as.numeric(`T askivali worm number`))
+TAS.avIntens.county %<>% group_by(FIPS) %>% summarize(TAS.avIntens=mean(`T askivali worm number`,na.rm=T))
+d.county %<>% left_join(.,TAS.avIntens.county)
+
+TAX.avIntens.county <- h %>% select(FIPS,`T axei worm number`)
+TAX.avIntens.county %<>% mutate(`T axei worm number`=as.numeric(`T axei worm number`))
+TAX.avIntens.county %<>% group_by(FIPS) %>% summarize(TAX.avIntens=mean(`T axei worm number`,na.rm=T))
+d.county %<>% left_join(.,TAX.avIntens.county)
+
+TD.avIntens.county <- h %>% select(FIPS,`T dosteri worm number`)
+TD.avIntens.county %<>% mutate(`T dosteri worm number`=as.numeric(`T dosteri worm number`))
+TD.avIntens.county %<>% group_by(FIPS) %>% summarize(TD.avIntens=mean(`T dosteri worm number`,na.rm=T))
+d.county %<>% left_join(.,TD.avIntens.county)
+
+TH.avIntens.county <- h %>% select(FIPS,`T hydatigena worm number`)
+TH.avIntens.county %<>% mutate(`T hydatigena worm number`=as.numeric(`T hydatigena worm number`))
+TH.avIntens.county %<>% group_by(FIPS) %>% summarize(TH.avIntens=mean(`T hydatigena worm number`,na.rm=T))
+d.county %<>% left_join(.,TH.avIntens.county)
+
+TS.avIntens.county <- h %>% select(FIPS,`T spp worm number`)
+TS.avIntens.county %<>% mutate(`T spp worm number`=as.numeric(`T spp worm number`))
+TS.avIntens.county %<>% group_by(FIPS) %>% summarize(TS.avIntens=mean(`T spp worm number`,na.rm=T))
+d.county %<>% left_join(.,TS.avIntens.county)
+```
+
+
+#mapping average intensity per county
+```{r, eval=FALSE}
+
+map.DV = d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=log10(1+DV.avIntens)))+scale_fill_gradient2(low = "blue", mid = "white",
+  high = "red",midpoint=0.8, 
+  na.value = "grey75")
+
+map.ES = d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=log10(1+ES.avIntens)))+scale_fill_gradient2(low = "blue", mid = "white",
+  high = "red",midpoint=0.5, 
+  na.value = "grey75")
+
+map.FM = d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=log10(1+FM.avIntens)))+scale_fill_gradient2(low = "blue", mid = "white",
+  high = "red",midpoint=0.75, 
+  na.value = "grey75")
+
+map.GP = d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=log10(1+GP.avIntens)))+scale_fill_gradient2(low = "blue", mid = "white",
+  high = "red",midpoint=1, 
+  na.value = "grey75")
+
+d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=log10(1+GV.avIntens)))+scale_fill_gradient2(low = "blue", mid = "white",
+  high = "red",midpoint=1, 
+  na.value = "grey75")
+
+d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=log10(1+HC.avIntens)))+scale_fill_gradient2(low = "blue", mid = "white",
+  high = "red",midpoint=1.6, 
+  na.value = "grey75")
+
+d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=log10(1+MO.avIntens)))+scale_fill_gradient2(low = "blue", mid = "white",
+  high = "red",midpoint=1.75, 
+  na.value = "grey75")
+
+d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=log10(1+MP.avIntens)))+scale_fill_gradient2(low = "blue", mid = "white",
+  high = "red",midpoint=1.75, 
+  na.value = "grey75")
+
+d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=log10(1+OC.avIntens)))+scale_fill_gradient2(low = "blue", mid = "white",
+  high = "red",midpoint=1.5, 
+  na.value = "grey75")
+
+d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=log10(1+OD.avIntens)))+scale_fill_gradient2(low = "blue", mid = "white",
+  high = "red",midpoint=1.75, 
+  na.value = "grey75")
+
+d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=log10(1+OM.avIntens)))+scale_fill_gradient2(low = "blue", mid = "white",
+  high = "red",midpoint=1.6, 
+  na.value = "grey75")
+
+d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=log10(1+OO.avIntens)))+scale_fill_gradient2(low = "blue", mid = "white",
+  high = "red",midpoint=1.3, 
+  na.value = "grey75")
+
+d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=log10(1+PA.avIntens)))+scale_fill_gradient2(low = "blue", mid = "white",
+  high = "red",midpoint=1.5, 
+  na.value = "grey75")
+
+d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=log10(1+PL.avIntens)))+scale_fill_gradient2(low = "blue", mid = "white",
+  high = "red",midpoint=1.3, 
+  na.value = "grey75")
+
+d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=log10(1+PT.avIntens)))+scale_fill_gradient2(low = "blue", mid = "white",
+  high = "red",midpoint=0.7, 
+  na.value = "grey75")
+
+d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=log10(1+SY.avIntens)))+scale_fill_gradient2(low = "blue", mid = "white",
+  high = "red",midpoint=0.75, 
+  na.value = "grey75")
+
+d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=log10(1+TAS.avIntens)))+scale_fill_gradient2(low = "blue", mid = "white",
+  high = "red",midpoint=1.6, 
+  na.value = "grey75")
+
+d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=log10(1+TAX.avIntens)))+scale_fill_gradient2(low = "blue", mid = "white",
+  high = "red",midpoint=1.5, 
+  na.value = "grey75")
+
+d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=log10(1+TD.avIntens)))+scale_fill_gradient2(low = "blue", mid = "white",
+  high = "red",midpoint=1.2, 
+  na.value = "grey75")
+
+d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=log10(1+TH.avIntens)))+scale_fill_gradient2(low = "blue", mid = "white",
+  high = "red",midpoint=0.375, 
+  na.value = "grey75")
+
+d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=log10(1+TS.avIntens)))+scale_fill_gradient2(low = "blue", mid = "white",
+  high = "red",midpoint=0.8, 
+  na.value = "grey75")
+```
+
+
+#mode deer density and max deer density maps
+```{r, eval=FALSE}
+d.county %>% ggplot(., aes(long, lat,group=group))+geom_polygon(aes(fill=as.factor(DeerDensityMax)))+scale_fill_manual(values=c(rgb(237,248,251,max=255),rgb(178,226,226,max=255),rgb(102,194,164,max=255),rgb(44,162,95,max=255),rgb(0,109,44,max=255)))+coord_map("lagrange")+ theme(legend.position="none")
+
+
+usa <- map_data("usa")
+
+d.county %>% ggplot(., aes(long, lat,group=group)) + geom_polygon(aes(alpha=as.factor(DeerDensityMode)),fill="red",col="gray25",size=0.05)+geom_polygon(data=subset(d.county,DeerDensityMode==0),fill="gray25")+geom_polygon(data=usa,fill=NA,col="gray25")+coord_map("lagrange")+ theme(legend.position="none")+scale_alpha_discrete(range=c(0.01,0.8))
+```
+
+
+### How many positive deer by year and by parasite
+```{r}
+#heatmap to show the years of data with parasite intensity values and the variation in intensity
+
+library("data.table") #for renaming column headers below
+library("viridis") #for heat map coloring
+
+#myParas <- c("H contortus worm number","G pulchrum worm number","F magna worm number")
+g <- read_csv("Herd Health Disease data.csv")
+setnames(g, old=c("O dikmansi", "O cervipedis"), new=c("O dikmansi worm number", "O cervipedis worm number"))
+#rename function - change
+g %<>% select(Date,ends_with("worm number"))
+g %<>% gather(ends_with("worm number"),key="parasite",value="intensity")
+library(lubridate)
+g %<>% mutate(date=mdy(Date))
+g %<>% select(-Date)
+g %<>% mutate(intensity=as.numeric(intensity))
+g %<>% drop_na()
+g %<>% mutate(year=year(date))
+g %<>% filter(intensity>0)
+g %<>% group_by(year,parasite) %>% summarize(n=n())
+g %>% ggplot(.,aes(x=year,y=parasite))+geom_tile(aes(fill=n))+scale_fill_viridis(name="log(Intensity)") +
+  xlab("Year") +
+  ylab("Parasite") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank()) 
+
+#two worms = P andersoni and O cervipedis have no intensity values for the heatmap
+```
+
+
+#Parasite prevalence
+```{r}
+
+```
+
